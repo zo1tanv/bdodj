@@ -1,49 +1,51 @@
 # BDODJ
 
-Separate Java Discord music bot for the BDO server. It runs independently from the main BDO bot and provides a button panel for playback control.
+Отдельный Node.js Discord-бот для музыки на BDO-сервере.
 
-## Commands
+## Bothost
 
-```text
-!play <url or search text>  - add a track
-!panel                      - show the button panel
-!pause                      - pause
-!resume                     - resume
-!skip                       - skip current track
-!stop                       - clear queue
-!leave                      - leave the voice channel
-!queue                      - show queue
-!now                        - show current track
-!help                       - show help
-```
+- Платформа: Discord.
+- Язык разработки: Node.js.
+- БД: не нужна.
+- Использовать собственный Dockerfile: включить.
+- Главный файл: можно оставить пустым, Dockerfile запускает `npm start`.
 
-## Environment
+## Переменные окружения
 
 ```env
 BDODJ_TOKEN=
 BDODJ_PREFIX=!
 BDODJ_ACTIVITY=BDO Radio
-BDODJ_STATUS=ONLINE
-BDODJ_MAX_QUEUE=100
 BDODJ_DEFAULT_VOLUME=60
+BDODJ_MAX_QUEUE=100
+BDODJ_VOICE_CONNECT_TIMEOUT_MS=30000
 ```
 
-`DISCORD_TOKEN` can be used instead of `BDODJ_TOKEN`.
+Можно использовать `DISCORD_TOKEN` вместо `BDODJ_TOKEN`.
 
-For prefix commands, enable Message Content Intent in the Discord Developer Portal for the BDODJ application.
+Токен берется в Discord Developer Portal:
+`Applications` -> твое приложение BDODJ -> `Bot` -> `Reset Token` / `Copy Token`.
 
-## Local Run
+Для префикс-команд включи `Message Content Intent`:
+`Applications` -> BDODJ -> `Bot` -> `Privileged Gateway Intents`.
+
+## Команды
+
+```text
+!play <url или текст для поиска>
+!panel
+!pause
+!skip
+!stop
+!leave
+!queue
+!now
+!help
+```
+
+## Локальный запуск
 
 ```bash
-mvn package
-java -jar target/bdodj-0.1.0.jar
+npm install
+npm start
 ```
-
-## Docker
-
-```bash
-docker build -t bdodj .
-docker run --env-file .env bdodj
-```
-
-Bothost can run this project only if the plan supports Docker or a custom Java container. If the Discord bot preset only offers Python, Node.js, and Go, use a separate Docker/VPS host for BDODJ or port BDODJ to Node.js.

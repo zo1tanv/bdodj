@@ -1,13 +1,22 @@
-FROM maven:3.9-eclipse-temurin-17 AS build
-WORKDIR /app
-COPY pom.xml ./
-RUN mvn -q -DskipTests dependency:go-offline
-COPY src ./src
-RUN mvn -q -DskipTests package
+FROM node:20-bookworm-slim
 
-FROM eclipse-temurin:17-jre
+ENV NODE_ENV=production
+
 WORKDIR /app
-COPY --from=build /app/target/bdodj.jar /app/bdodj.jar
-ENV BDODJ_PREFIX=!
-ENV BDODJ_ACTIVITY="BDO Radio"
-CMD ["java", "-Xms64m", "-Xmx256m", "-jar", "/app/bdodj.jar"]
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    ffmpeg \
+    g++ \
+    make \
+    python3 \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY package*.json ./
+RUN npm install --omit=dev
+
+COPY . .
+
+CMD ["npm", "start"]

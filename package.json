@@ -1,0 +1,21 @@
+{
+  "name": "bdodj",
+  "version": "0.2.0",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "postinstall": "node -e \"console.log('BDODJ_BUILD_MARKER node-voice-v1')\""
+  },
+  "type": "commonjs",
+  "dependencies": {
+    "@discordjs/voice": "0.18.0",
+    "debug": "^4.3.7",
+    "discord.js": "^14.0.0",
+    "dotenv": "^16.0.0",
+    "libsodium-wrappers": "^0.8.4",
+    "youtube-dl-exec": "^3.1.6"
+  }
+}
