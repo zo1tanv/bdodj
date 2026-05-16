@@ -17,9 +17,12 @@ import net.dv8tion.jda.api.entities.VoiceChannel;
 import net.dv8tion.jda.api.managers.AudioManager;
 
 final class MusicService {
+  private static final long VOICE_ERROR_COOLDOWN_MS = 30_000;
+
   private final AudioPlayerManager audioManager;
   private final BotConfig config;
   private final Map<Long, GuildMusicManager> managers = new ConcurrentHashMap<>();
+  private final Map<Long, Long> voiceCooldownUntil = new ConcurrentHashMap<>();
 
   MusicService(AudioPlayerManager audioManager, BotConfig config) {
     this.audioManager = audioManager;
@@ -40,6 +43,11 @@ final class MusicService {
   void connect(VoiceChannel channel) {
     GuildMusicManager manager = manager(channel.getGuild());
     AudioManager audio = channel.getGuild().getAudioManager();
+    Long cooldown = voiceCooldownUntil.get(channel.getGuild().getIdLong());
+    if (cooldown != null && cooldown > System.currentTimeMillis()) {
+      System.out.printf("[voice] blocked by cooldown guild=%s channel=%s%n", channel.getGuild().getId(), channel.getId());
+      throw new IllegalStateException("Discord voice connection failed recently. Wait a little and try again, or use another host/location.");
+    }
     if (audio.getConnectedChannel() != null && audio.getConnectedChannel().getIdLong() == channel.getIdLong()) {
       return;
     }
@@ -56,19 +64,13 @@ final class MusicService {
       public void onStatusChange(ConnectionStatus status) {
         System.out.printf("[voice] status=%s guild=%s channel=%s%n", status, channel.getGuild().getId(), channel.getId());
         if (status.name().startsWith("ERROR_")) {
+          voiceCooldownUntil.put(channel.getGuild().getIdLong(), System.currentTimeMillis() + VOICE_ERROR_COOLDOWN_MS);
           manager.scheduler.stop();
-          new Thread(() -> {
-            try {
-              Thread.sleep(250);
-            } catch (InterruptedException interrupted) {
-              Thread.currentThread().interrupt();
-            }
-            AudioManager currentAudio = channel.getGuild().getAudioManager();
-            if (currentAudio.isConnected() || currentAudio.isAttemptingToConnect()) {
-              System.out.printf("[voice] closing after %s guild=%s channel=%s%n", status, channel.getGuild().getId(), channel.getId());
-              currentAudio.closeAudioConnection();
-            }
-          }, "bdodj-voice-error-close").start();
+          AudioManager currentAudio = channel.getGuild().getAudioManager();
+          currentAudio.setAutoReconnect(false);
+          currentAudio.setSendingHandler(null);
+          System.out.printf("[voice] closing after %s guild=%s channel=%s%n", status, channel.getGuild().getId(), channel.getId());
+          currentAudio.closeAudioConnection();
         }
       }
 
