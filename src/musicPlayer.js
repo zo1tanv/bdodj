@@ -210,6 +210,7 @@ class MusicPlayer {
 
   async createResource(track) {
     const url = await this.directAudioUrl(track);
+    const volume = Math.max(0, Math.min(2, this.config.defaultVolume / 100)).toFixed(2);
     this.ffmpeg = spawn('ffmpeg', [
       '-hide_banner',
       '-loglevel', 'warning',
@@ -219,18 +220,15 @@ class MusicPlayer {
       '-i', url,
       '-analyzeduration', '0',
       '-loglevel', '0',
+      '-filter:a', `volume=${volume}`,
       '-ar', '48000',
       '-ac', '2',
-      '-f', 's16le',
+      '-c:a', 'libopus',
+      '-f', 'ogg',
       'pipe:1',
     ], { stdio: ['ignore', 'pipe', 'ignore'] });
     this.ffmpeg.once('error', error => console.error('[ffmpeg] spawn error:', error.message));
-    const resource = createAudioResource(this.ffmpeg.stdout, {
-      inputType: StreamType.Raw,
-      inlineVolume: true,
-    });
-    resource.volume?.setVolume(Math.max(0, Math.min(2, this.config.defaultVolume / 100)));
-    return resource;
+    return createAudioResource(this.ffmpeg.stdout, { inputType: StreamType.OggOpus });
   }
 
   async playCurrent() {
