@@ -136,10 +136,15 @@ class MusicPlayer {
   }
 
   async ensureConnection() {
-    if (this.connection && this.connection.state.status !== VoiceConnectionStatus.Destroyed) {
-      if (this.connection.state.status === VoiceConnectionStatus.Ready) return;
-      await entersState(this.connection, VoiceConnectionStatus.Ready, this.config.voiceConnectTimeoutMs);
+    if (this.connection && this.connection.state.status === VoiceConnectionStatus.Ready) {
       return;
+    }
+
+    if (this.connection) {
+      try {
+        this.connection.destroy();
+      } catch {}
+      this.connection = null;
     }
 
     this.status = 'connecting';
@@ -149,8 +154,8 @@ class MusicPlayer {
       guildId: this.voiceChannel.guild.id,
       adapterCreator: this.voiceChannel.guild.voiceAdapterCreator,
       selfDeaf: true,
+      selfMute: false,
     });
-    this.connection.subscribe(this.player);
     this.connection.on('stateChange', (oldState, newState) => {
       console.log(`[voice] state ${oldState.status} -> ${newState.status}`);
     });
@@ -158,7 +163,31 @@ class MusicPlayer {
       this.lastError = error.message;
       console.error('[voice] connection error:', error.stack || error.message);
     });
-    await entersState(this.connection, VoiceConnectionStatus.Ready, this.config.voiceConnectTimeoutMs);
+    try {
+      await entersState(this.connection, VoiceConnectionStatus.Ready, this.config.voiceConnectTimeoutMs);
+      console.log('[voice] ready');
+      this.connection.subscribe(this.player);
+    } catch (error) {
+      this.lastError = `Voice connection did not become ready: ${error.message}`;
+      console.error(`[voice] failed to reach ready after ${this.config.voiceConnectTimeoutMs}ms:`, error.message);
+      try {
+        this.connection.destroy();
+      } catch {}
+      this.connection = null;
+      throw error;
+    }
+  }
+
+  async connectOnly(voiceChannel) {
+    const voice = this.validateVoiceChannel(voiceChannel);
+    if (!voice.ok) return voice;
+    this.voiceChannel = voiceChannel;
+    try {
+      await this.ensureConnection();
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error.message };
+    }
   }
 
   async directAudioUrl(track) {
@@ -190,15 +219,14 @@ class MusicPlayer {
       '-i', url,
       '-analyzeduration', '0',
       '-loglevel', '0',
-      '-f', 'ogg',
-      '-acodec', 'libopus',
       '-ar', '48000',
       '-ac', '2',
+      '-f', 's16le',
       'pipe:1',
-    ], { stdio: ['ignore', 'pipe', 'pipe'] });
+    ], { stdio: ['ignore', 'pipe', 'ignore'] });
     this.ffmpeg.once('error', error => console.error('[ffmpeg] spawn error:', error.message));
     const resource = createAudioResource(this.ffmpeg.stdout, {
-      inputType: StreamType.OggOpus,
+      inputType: StreamType.Raw,
       inlineVolume: true,
     });
     resource.volume?.setVolume(Math.max(0, Math.min(2, this.config.defaultVolume / 100)));

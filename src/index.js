@@ -71,6 +71,10 @@ client.on(Events.MessageCreate, async message => {
     if (!args) return message.reply(`Use \`${config.prefix}play <song or url>\`.`);
     return queueTrack(message, args);
   }
+  if (command === 'join') {
+    const result = await player.connectOnly(message.member?.voice?.channel);
+    return message.reply(result.ok ? 'Voice connection is ready.' : `Voice connection failed: ${result.error}`);
+  }
   if (command === 'panel' || command === 'music') return message.channel.send(buildPanel(player));
   if (command === 'pause' || command === 'resume') return message.reply(player.pause() ? 'Toggled pause.' : 'Nothing is playing.');
   if (command === 'skip') return message.reply(player.skip() ? 'Skipped.' : 'Nothing to skip.');
@@ -87,6 +91,7 @@ client.on(Events.MessageCreate, async message => {
   if (command === 'help') {
     return message.reply([
       `\`${config.prefix}play <song or url>\``,
+      `\`${config.prefix}join\``,
       `\`${config.prefix}panel\``,
       `\`${config.prefix}pause\`, \`${config.prefix}skip\`, \`${config.prefix}stop\`, \`${config.prefix}leave\``,
       `\`${config.prefix}queue\`, \`${config.prefix}now\``,
