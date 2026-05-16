@@ -31,6 +31,8 @@ Run `/panel` once in the existing music text channel. BDODJ stores this message 
 Buttons:
 - Add: opens a modal for a YouTube link or search text.
 - Queue: shows the queue privately.
+- Recommendations: opens categories and curated track picks.
+- Playlists: opens server/personal playlists and save-current controls.
 - Pause, Skip, Stop: playback controls.
 - Shuffle, Refresh, Leave: queue and voice controls.
 
@@ -50,7 +52,16 @@ Use `/panel reset:true` to create a new saved panel in the current channel.
 /leave
 /queue
 /now
+/playlist list
+/playlist create
+/playlist add-current
+/playlist add-query
+/playlist play
+/playlist delete
 ```
+
+Recommendations are stored in `data/recommendations.json`.
+Runtime panel and playlist data are stored in `data/panels.json` and `data/playlists.json`.
 
 ## Local Run
 

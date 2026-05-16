@@ -92,6 +92,8 @@ function buildPanel(player) {
   );
 
   const row2 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('bdodj_recommend').setEmoji('✨').setLabel('Рекомендации').setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId('bdodj_playlists').setEmoji('💿').setLabel('Плейлисты').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId('bdodj_shuffle').setEmoji('🔀').setLabel('Перемешать').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId('bdodj_refresh').setEmoji('🔄').setLabel('Обновить').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId('bdodj_leave').setEmoji('🚪').setLabel('Выйти').setStyle(ButtonStyle.Secondary),

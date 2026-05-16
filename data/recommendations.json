@@ -1,0 +1,64 @@
+{
+  "categories": [
+    {
+      "id": "popular",
+      "label": "Популярное",
+      "description": "Знакомые треки для общего вайба",
+      "tracks": [
+        { "title": "The Weeknd - Blinding Lights", "query": "The Weeknd Blinding Lights" },
+        { "title": "Imagine Dragons - Believer", "query": "Imagine Dragons Believer" },
+        { "title": "Dua Lipa - Levitating", "query": "Dua Lipa Levitating" },
+        { "title": "Daft Punk - One More Time", "query": "Daft Punk One More Time" },
+        { "title": "Avicii - The Nights", "query": "Avicii The Nights" }
+      ]
+    },
+    {
+      "id": "grind",
+      "label": "BDO grind",
+      "description": "Ритм для фарма и долгих сессий",
+      "tracks": [
+        { "title": "Carpenter Brut - Turbo Killer", "query": "Carpenter Brut Turbo Killer" },
+        { "title": "Perturbator - Future Club", "query": "Perturbator Future Club" },
+        { "title": "The Prodigy - Omen", "query": "The Prodigy Omen" },
+        { "title": "Celldweller - End of an Empire", "query": "Celldweller End of an Empire" },
+        { "title": "Blue Stahli - ULTRAnumb", "query": "Blue Stahli ULTRAnumb" }
+      ]
+    },
+    {
+      "id": "chill",
+      "label": "Chill",
+      "description": "Спокойный фон для общения",
+      "tracks": [
+        { "title": "ODESZA - A Moment Apart", "query": "ODESZA A Moment Apart" },
+        { "title": "Tycho - Awake", "query": "Tycho Awake" },
+        { "title": "M83 - Midnight City", "query": "M83 Midnight City" },
+        { "title": "Bonobo - Cirrus", "query": "Bonobo Cirrus" },
+        { "title": "Petit Biscuit - Sunset Lover", "query": "Petit Biscuit Sunset Lover" }
+      ]
+    },
+    {
+      "id": "rock",
+      "label": "Rock",
+      "description": "Гитары, драйв, классика",
+      "tracks": [
+        { "title": "Linkin Park - Numb", "query": "Linkin Park Numb" },
+        { "title": "Muse - Hysteria", "query": "Muse Hysteria" },
+        { "title": "Foo Fighters - The Pretender", "query": "Foo Fighters The Pretender" },
+        { "title": "Royal Blood - Figure It Out", "query": "Royal Blood Figure It Out" },
+        { "title": "Arctic Monkeys - R U Mine?", "query": "Arctic Monkeys R U Mine" }
+      ]
+    },
+    {
+      "id": "electronic",
+      "label": "Electronic",
+      "description": "Электроника и плотный бит",
+      "tracks": [
+        { "title": "Deadmau5 - Ghosts 'n' Stuff", "query": "Deadmau5 Ghosts n Stuff" },
+        { "title": "Justice - Genesis", "query": "Justice Genesis" },
+        { "title": "The Chemical Brothers - Go", "query": "The Chemical Brothers Go" },
+        { "title": "Kavinsky - Nightcall", "query": "Kavinsky Nightcall" },
+        { "title": "Skrillex - Bangarang", "query": "Skrillex Bangarang" }
+      ]
+    }
+  ]
+}

@@ -1,11 +1,14 @@
 const {
   ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
   Client,
   Events,
   GatewayIntentBits,
   MessageFlags,
   ModalBuilder,
   SlashCommandBuilder,
+  StringSelectMenuBuilder,
   TextInputBuilder,
   TextInputStyle,
 } = require('discord.js');
@@ -13,6 +16,8 @@ const config = require('./config');
 const MusicPlayer = require('./musicPlayer');
 const { buildPanel, buildQueue } = require('./musicPanel');
 const { deletePanel, getPanel, setPanel } = require('./panelStore');
+const recommendations = require('./recommendations');
+const playlists = require('./playlistStore');
 
 if (!config.token) {
   console.error('BDODJ_TOKEN or DISCORD_TOKEN is required.');
@@ -74,6 +79,63 @@ function slashCommands() {
     new SlashCommandBuilder().setName('leave').setDescription('Disconnect BDODJ from voice'),
     new SlashCommandBuilder().setName('queue').setDescription('Show the queue privately'),
     new SlashCommandBuilder().setName('now').setDescription('Show the current track'),
+    new SlashCommandBuilder()
+      .setName('playlist')
+      .setDescription('Manage BDODJ playlists')
+      .addSubcommand(command =>
+        command.setName('list')
+          .setDescription('Show playlists')
+          .addStringOption(option => option.setName('scope').setDescription('Playlist scope').setRequired(true).addChoices(
+            { name: 'Server', value: 'server' },
+            { name: 'Personal', value: 'personal' },
+          ))
+      )
+      .addSubcommand(command =>
+        command.setName('create')
+          .setDescription('Create a playlist')
+          .addStringOption(option => option.setName('scope').setDescription('Playlist scope').setRequired(true).addChoices(
+            { name: 'Server', value: 'server' },
+            { name: 'Personal', value: 'personal' },
+          ))
+          .addStringOption(option => option.setName('name').setDescription('Playlist name').setRequired(true))
+      )
+      .addSubcommand(command =>
+        command.setName('add-current')
+          .setDescription('Save the current track to a playlist')
+          .addStringOption(option => option.setName('scope').setDescription('Playlist scope').setRequired(true).addChoices(
+            { name: 'Server', value: 'server' },
+            { name: 'Personal', value: 'personal' },
+          ))
+          .addStringOption(option => option.setName('name').setDescription('Playlist name').setRequired(true))
+      )
+      .addSubcommand(command =>
+        command.setName('add-query')
+          .setDescription('Save a YouTube link or search text to a playlist')
+          .addStringOption(option => option.setName('scope').setDescription('Playlist scope').setRequired(true).addChoices(
+            { name: 'Server', value: 'server' },
+            { name: 'Personal', value: 'personal' },
+          ))
+          .addStringOption(option => option.setName('name').setDescription('Playlist name').setRequired(true))
+          .addStringOption(option => option.setName('query').setDescription('YouTube link or search text').setRequired(true))
+      )
+      .addSubcommand(command =>
+        command.setName('play')
+          .setDescription('Add a playlist to the queue')
+          .addStringOption(option => option.setName('scope').setDescription('Playlist scope').setRequired(true).addChoices(
+            { name: 'Server', value: 'server' },
+            { name: 'Personal', value: 'personal' },
+          ))
+          .addStringOption(option => option.setName('name').setDescription('Playlist name').setRequired(true))
+      )
+      .addSubcommand(command =>
+        command.setName('delete')
+          .setDescription('Delete a playlist')
+          .addStringOption(option => option.setName('scope').setDescription('Playlist scope').setRequired(true).addChoices(
+            { name: 'Server', value: 'server' },
+            { name: 'Personal', value: 'personal' },
+          ))
+          .addStringOption(option => option.setName('name').setDescription('Playlist name').setRequired(true))
+      ),
   ].map(command => command.toJSON());
 }
 
@@ -151,6 +213,131 @@ function rememberPanelFromInteraction(interaction) {
   });
 }
 
+function playlistScopeLabel(scope) {
+  return scope === 'personal' ? 'личный' : 'серверный';
+}
+
+function buildRecommendationCategoryMenu() {
+  const categories = recommendations.categories().slice(0, 25);
+  if (!categories.length) {
+    return { content: 'Рекомендации пока не настроены.', components: [] };
+  }
+
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId('bdodj_rec_category')
+    .setPlaceholder('Выбери категорию')
+    .addOptions(categories.map(category => ({
+      label: category.label,
+      description: category.description || undefined,
+      value: category.id,
+    })));
+
+  return {
+    content: 'Выбери настроение, а потом трек.',
+    components: [new ActionRowBuilder().addComponents(menu)],
+  };
+}
+
+function buildRecommendationTrackMenu(categoryId) {
+  const category = recommendations.categoryById(categoryId);
+  if (!category) return { content: 'Категория не найдена.', components: [] };
+
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId(`bdodj_rec_track:${category.id}`)
+    .setPlaceholder('Выбери трек')
+    .addOptions(category.tracks.slice(0, 25).map((track, index) => ({
+      label: String(track.title || track.query).slice(0, 100),
+      description: String(track.query || '').slice(0, 100),
+      value: String(index),
+    })));
+
+  return {
+    content: `Категория: **${category.label}**`,
+    components: [new ActionRowBuilder().addComponents(menu)],
+  };
+}
+
+function buildPlaylistHome() {
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('bdodj_playlist_server').setLabel('Серверные').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('bdodj_playlist_personal').setLabel('Мои').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('bdodj_playlist_save:server').setLabel('Сохранить текущий').setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId('bdodj_playlist_create:server').setLabel('Создать').setStyle(ButtonStyle.Primary),
+  );
+  return {
+    content: 'Плейлисты: выбери список или сохрани текущий трек.',
+    components: [row],
+  };
+}
+
+function buildPlaylistSelect(guildId, userId, scope) {
+  const items = playlists.listPlaylists(guildId, scope, userId).slice(0, 25);
+  if (!items.length) {
+    return {
+      content: `${playlistScopeLabel(scope)} плейлистов пока нет. Создай первый через кнопку или /playlist create.`,
+      components: [new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`bdodj_playlist_create:${scope}`).setLabel('Создать').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`bdodj_playlist_save:${scope}`).setLabel('Сохранить текущий').setStyle(ButtonStyle.Success),
+      )],
+    };
+  }
+
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId(`bdodj_playlist_play:${scope}`)
+    .setPlaceholder('Выбери плейлист для добавления в очередь')
+    .addOptions(items.map(playlist => ({
+      label: playlist.name.slice(0, 100),
+      description: `${playlist.tracks.length} трек(ов)`.slice(0, 100),
+      value: playlist.id,
+    })));
+
+  return {
+    content: `Выбери ${playlistScopeLabel(scope)} плейлист.`,
+    components: [
+      new ActionRowBuilder().addComponents(menu),
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`bdodj_playlist_create:${scope}`).setLabel('Создать').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`bdodj_playlist_save:${scope}`).setLabel('Сохранить текущий').setStyle(ButtonStyle.Success),
+      ),
+    ],
+  };
+}
+
+function playlistNameModal(customId, title) {
+  return new ModalBuilder()
+    .setCustomId(customId)
+    .setTitle(title)
+    .addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('name')
+          .setLabel('Название плейлиста')
+          .setStyle(TextInputStyle.Short)
+          .setRequired(true)
+          .setMaxLength(80)
+      )
+    );
+}
+
+async function enqueueQuery(interaction, player, query) {
+  const result = await player.enqueue(query, interaction.user, interaction.member?.voice?.channel);
+  await refreshStoredPanel(interaction.guildId);
+  return result;
+}
+
+async function enqueuePlaylist(interaction, player, playlist) {
+  if (!playlist?.tracks?.length) return { ok: false, error: 'Плейлист пуст.' };
+  let added = 0;
+  let lastError = null;
+  for (const track of playlist.tracks.slice(0, 25)) {
+    const result = await enqueueQuery(interaction, player, track.query);
+    if (result.ok) added += 1;
+    else lastError = result.error;
+  }
+  if (!added) return { ok: false, error: lastError || 'Не удалось добавить треки.' };
+  return { ok: true, added };
+}
+
 async function handleSlashCommand(interaction, player) {
   if (interaction.commandName === 'panel') {
     if (interaction.options.getBoolean('reset')) deletePanel(interaction.guildId);
@@ -160,12 +347,7 @@ async function handleSlashCommand(interaction, player) {
 
   if (interaction.commandName === 'play') {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    const result = await player.enqueue(
-      interaction.options.getString('query', true),
-      interaction.user,
-      interaction.member?.voice?.channel
-    );
-    await refreshStoredPanel(interaction.guildId);
+    const result = await enqueueQuery(interaction, player, interaction.options.getString('query', true));
     if (!result.ok) return interaction.editReply(`Не получилось: ${result.error}`);
     return interaction.editReply(`Добавлено: **${result.track.title}**`);
   }
@@ -211,6 +393,67 @@ async function handleSlashCommand(interaction, player) {
       flags: MessageFlags.Ephemeral,
     });
   }
+
+  if (interaction.commandName === 'playlist') {
+    const subcommand = interaction.options.getSubcommand();
+    const scope = interaction.options.getString('scope');
+    const name = interaction.options.getString('name');
+
+    if (subcommand === 'list') {
+      const items = playlists.listPlaylists(interaction.guildId, scope, interaction.user.id);
+      const lines = items.length
+        ? items.slice(0, 20).map(item => `- **${item.name}** (${item.tracks.length})`)
+        : [`${playlistScopeLabel(scope)} плейлистов пока нет.`];
+      return interaction.reply({ content: lines.join('\n'), flags: MessageFlags.Ephemeral });
+    }
+
+    if (subcommand === 'create') {
+      const result = playlists.createPlaylist(interaction.guildId, scope, interaction.user.id, name);
+      return interaction.reply({
+        content: result.ok ? `Создан ${playlistScopeLabel(scope)} плейлист **${result.playlist.name}**.` : `Не получилось: ${result.error}`,
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+
+    if (subcommand === 'add-current') {
+      if (!player.currentTrack) {
+        return interaction.reply({ content: 'Сейчас ничего не играет.', flags: MessageFlags.Ephemeral });
+      }
+      const result = playlists.addTrack(interaction.guildId, scope, interaction.user.id, name, {
+        title: player.currentTrack.title,
+        query: player.currentTrack.webpageUrl,
+      });
+      return interaction.reply({
+        content: result.ok ? `Сохранено в **${result.playlist.name}**.` : `Не получилось: ${result.error}`,
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+
+    if (subcommand === 'add-query') {
+      const query = interaction.options.getString('query', true);
+      const result = playlists.addTrack(interaction.guildId, scope, interaction.user.id, name, { title: query, query });
+      return interaction.reply({
+        content: result.ok ? `Добавлено в **${result.playlist.name}**.` : `Не получилось: ${result.error}`,
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+
+    if (subcommand === 'play') {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      const playlist = playlists.getPlaylist(interaction.guildId, scope, interaction.user.id, name);
+      const result = await enqueuePlaylist(interaction, player, playlist);
+      if (!result.ok) return interaction.editReply(`Не получилось: ${result.error}`);
+      return interaction.editReply(`Добавлено из плейлиста **${playlist.name}**: ${result.added} трек(ов).`);
+    }
+
+    if (subcommand === 'delete') {
+      const ok = playlists.deletePlaylist(interaction.guildId, scope, interaction.user.id, name);
+      return interaction.reply({
+        content: ok ? `Плейлист **${name}** удалён.` : `Плейлист **${name}** не найден.`,
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+  }
 }
 
 async function reportInteractionError(interaction, error) {
@@ -251,6 +494,8 @@ client.on(Events.InteractionCreate, async interaction => {
       rememberPanelFromInteraction(interaction);
       if (interaction.customId === 'bdodj_add') return await interaction.showModal(musicModal());
       if (interaction.customId === 'bdodj_queue') return await interaction.reply({ ...buildQueue(player), flags: MessageFlags.Ephemeral });
+      if (interaction.customId === 'bdodj_recommend') return await interaction.reply({ ...buildRecommendationCategoryMenu(), flags: MessageFlags.Ephemeral });
+      if (interaction.customId === 'bdodj_playlists') return await interaction.reply({ ...buildPlaylistHome(), flags: MessageFlags.Ephemeral });
       if (interaction.customId === 'bdodj_pause') {
         player.pause();
         return await interaction.update(buildPanel(player));
@@ -272,16 +517,79 @@ client.on(Events.InteractionCreate, async interaction => {
         player.leave();
         return await interaction.update(buildPanel(player));
       }
+      if (interaction.customId.startsWith('bdodj_playlist_create:')) {
+        const scope = interaction.customId.split(':')[1] || 'server';
+        return await interaction.showModal(playlistNameModal(`bdodj_modal_playlist_create:${scope}`, 'Создать плейлист'));
+      }
+      if (interaction.customId.startsWith('bdodj_playlist_save:')) {
+        const scope = interaction.customId.split(':')[1] || 'server';
+        return await interaction.showModal(playlistNameModal(`bdodj_modal_playlist_save:${scope}`, 'Сохранить текущий трек'));
+      }
+      if (interaction.customId === 'bdodj_playlist_server') {
+        return await interaction.update(buildPlaylistSelect(interaction.guildId, interaction.user.id, 'server'));
+      }
+      if (interaction.customId === 'bdodj_playlist_personal') {
+        return await interaction.update(buildPlaylistSelect(interaction.guildId, interaction.user.id, 'personal'));
+      }
+    }
+
+    if (interaction.isStringSelectMenu()) {
+      if (interaction.customId === 'bdodj_rec_category') {
+        return await interaction.update(buildRecommendationTrackMenu(interaction.values[0]));
+      }
+
+      if (interaction.customId.startsWith('bdodj_rec_track:')) {
+        const categoryId = interaction.customId.split(':')[1];
+        const track = recommendations.trackByValue(categoryId, interaction.values[0]);
+        await interaction.deferUpdate();
+        if (!track) return await interaction.editReply({ content: 'Трек не найден.', components: [] });
+        const result = await enqueueQuery(interaction, player, track.query);
+        if (!result.ok) return await interaction.editReply({ content: `Не получилось: ${result.error}`, components: [] });
+        return await interaction.editReply({ content: `Добавлено: **${result.track.title}**`, components: [] });
+      }
+
+      if (interaction.customId.startsWith('bdodj_playlist_play:')) {
+        const scope = interaction.customId.split(':')[1] || 'server';
+        await interaction.deferUpdate();
+        const playlist = playlists.getPlaylist(interaction.guildId, scope, interaction.user.id, interaction.values[0]);
+        const result = await enqueuePlaylist(interaction, player, playlist);
+        if (!result.ok) return await interaction.editReply({ content: `Не получилось: ${result.error}`, components: [] });
+        return await interaction.editReply({ content: `Добавлено из плейлиста **${playlist.name}**: ${result.added} трек(ов).`, components: [] });
+      }
     }
 
     if (interaction.isModalSubmit() && interaction.customId === 'bdodj_modal_add') {
       const query = interaction.fields.getTextInputValue('query');
-      const voiceChannel = interaction.member?.voice?.channel;
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-      const result = await player.enqueue(query, interaction.user, voiceChannel);
-      await refreshStoredPanel(interaction.guildId);
+      const result = await enqueueQuery(interaction, player, query);
       if (!result.ok) return await interaction.editReply(`Не получилось: ${result.error}`);
       return await interaction.editReply(`Добавлено: **${result.track.title}**`);
+    }
+
+    if (interaction.isModalSubmit() && interaction.customId.startsWith('bdodj_modal_playlist_create:')) {
+      const scope = interaction.customId.split(':')[1] || 'server';
+      const name = interaction.fields.getTextInputValue('name');
+      const result = playlists.createPlaylist(interaction.guildId, scope, interaction.user.id, name);
+      return await interaction.reply({
+        content: result.ok ? `Создан ${playlistScopeLabel(scope)} плейлист **${result.playlist.name}**.` : `Не получилось: ${result.error}`,
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+
+    if (interaction.isModalSubmit() && interaction.customId.startsWith('bdodj_modal_playlist_save:')) {
+      const scope = interaction.customId.split(':')[1] || 'server';
+      const name = interaction.fields.getTextInputValue('name');
+      if (!player.currentTrack) {
+        return await interaction.reply({ content: 'Сейчас ничего не играет.', flags: MessageFlags.Ephemeral });
+      }
+      const result = playlists.addTrack(interaction.guildId, scope, interaction.user.id, name, {
+        title: player.currentTrack.title,
+        query: player.currentTrack.webpageUrl,
+      });
+      return await interaction.reply({
+        content: result.ok ? `Сохранено в **${result.playlist.name}**.` : `Не получилось: ${result.error}`,
+        flags: MessageFlags.Ephemeral,
+      });
     }
   } catch (error) {
     await reportInteractionError(interaction, error);
