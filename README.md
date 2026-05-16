@@ -1,16 +1,16 @@
 # BDODJ
 
-Отдельный Node.js Discord-бот для музыки на BDO-сервере.
+Separate Node.js Discord music bot for the BDO server.
 
 ## Bothost
 
-- Платформа: Discord.
-- Язык разработки: Node.js.
-- БД: не нужна.
-- Использовать собственный Dockerfile: включить.
-- Главный файл: можно оставить пустым, Dockerfile запускает `npm start`.
+- Platform: Discord.
+- Language: Node.js.
+- Database: not required.
+- Custom Dockerfile: enabled.
+- Entry point: can be empty, Dockerfile runs `npm start`.
 
-## Переменные окружения
+## Environment
 
 ```env
 BDODJ_TOKEN=
@@ -21,19 +21,30 @@ BDODJ_MAX_QUEUE=100
 BDODJ_VOICE_CONNECT_TIMEOUT_MS=30000
 ```
 
-Можно использовать `DISCORD_TOKEN` вместо `BDODJ_TOKEN`.
+`DISCORD_TOKEN` can be used instead of `BDODJ_TOKEN`.
 
-Токен берется в Discord Developer Portal:
-`Applications` -> твое приложение BDODJ -> `Bot` -> `Reset Token` / `Copy Token`.
-
-Для префикс-команд включи `Message Content Intent`:
+Enable Message Content Intent in the Discord Developer Portal:
 `Applications` -> BDODJ -> `Bot` -> `Privileged Gateway Intents`.
 
-## Команды
+## Main UX
+
+Run `!panel` once in the music text channel. BDODJ stores this message as the server music panel and keeps editing it after playback changes.
+
+Buttons:
+- Add: opens a modal for a YouTube link or search text.
+- Queue: shows the queue privately.
+- Pause, Skip, Stop: playback controls.
+- Shuffle, Refresh, Leave: queue and voice controls.
+
+Use `!panel reset` to create a new saved panel.
+
+## Commands
 
 ```text
-!play <url или текст для поиска>
+!play <url or search text>
 !panel
+!panel reset
+!join
 !pause
 !skip
 !stop
@@ -43,7 +54,7 @@ BDODJ_VOICE_CONNECT_TIMEOUT_MS=30000
 !help
 ```
 
-## Локальный запуск
+## Local Run
 
 ```bash
 npm install

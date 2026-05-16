@@ -2,6 +2,7 @@ const { ActionRowBuilder, Client, Events, GatewayIntentBits, MessageFlags, Modal
 const config = require('./config');
 const MusicPlayer = require('./musicPlayer');
 const { buildPanel, buildQueue } = require('./musicPanel');
+const { deletePanel, getPanel, setPanel } = require('./panelStore');
 
 if (!config.token) {
   console.error('BDODJ_TOKEN or DISCORD_TOKEN is required.');
@@ -23,6 +24,7 @@ function playerFor(guildId) {
   let player = players.get(guildId);
   if (!player) {
     player = new MusicPlayer(client, config);
+    player.setUpdateHandler(() => refreshStoredPanel(guildId));
     players.set(guildId, player);
   }
   return player;
@@ -31,25 +33,68 @@ function playerFor(guildId) {
 function musicModal() {
   return new ModalBuilder()
     .setCustomId('bdodj_modal_add')
-    .setTitle('Add track')
+    .setTitle('Добавить трек')
     .addComponents(
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
           .setCustomId('query')
-          .setLabel('YouTube link or search text')
+          .setLabel('Ссылка YouTube или название')
           .setStyle(TextInputStyle.Short)
           .setRequired(true)
       )
     );
 }
 
+async function fetchStoredPanel(guildId) {
+  const panel = getPanel(guildId);
+  if (!panel) return null;
+  try {
+    const channel = await client.channels.fetch(panel.channelId);
+    if (!channel?.messages) return null;
+    const message = await channel.messages.fetch(panel.messageId);
+    return message || null;
+  } catch {
+    deletePanel(guildId);
+    return null;
+  }
+}
+
+async function refreshStoredPanel(guildId) {
+  const panelMessage = await fetchStoredPanel(guildId);
+  if (!panelMessage) return null;
+  const player = playerFor(guildId);
+  await panelMessage.edit(buildPanel(player));
+  return panelMessage;
+}
+
+async function publishPanel(channel, guildId, player) {
+  const existing = await fetchStoredPanel(guildId);
+  if (existing) {
+    await existing.edit(buildPanel(player));
+    return existing;
+  }
+
+  const message = await channel.send(buildPanel(player));
+  setPanel(guildId, { channelId: channel.id, messageId: message.id });
+  return message;
+}
+
+function rememberPanelFromInteraction(interaction) {
+  if (!interaction.message?.id || !interaction.channelId) return;
+  setPanel(interaction.guildId, {
+    channelId: interaction.channelId,
+    messageId: interaction.message.id,
+  });
+}
+
 async function queueTrack(message, query) {
   const voiceChannel = message.member?.voice?.channel;
   const player = playerFor(message.guildId);
-  const loading = await message.reply('Searching...');
+  const loading = await message.reply('Ищу трек...');
   const result = await player.enqueue(query, message.author, voiceChannel);
-  if (!result.ok) return loading.edit(`Error: ${result.error}`);
-  return loading.edit(`Added: **${result.track.title}**`);
+  await refreshStoredPanel(message.guildId);
+  if (!result.ok) return loading.edit(`Не получилось: ${result.error}`);
+  return loading.edit(`Добавлено: **${result.track.title}**`);
 }
 
 client.once(Events.ClientReady, c => {
@@ -68,31 +113,46 @@ client.on(Events.MessageCreate, async message => {
   const player = playerFor(message.guildId);
 
   if (command === 'play' || command === 'p') {
-    if (!args) return message.reply(`Use \`${config.prefix}play <song or url>\`.`);
+    if (!args) return message.reply(`Используй \`${config.prefix}play <трек или ссылка>\`.`);
     return queueTrack(message, args);
   }
   if (command === 'join') {
     const result = await player.connectOnly(message.member?.voice?.channel);
-    return message.reply(result.ok ? 'Voice connection is ready.' : `Voice connection failed: ${result.error}`);
+    await refreshStoredPanel(message.guildId);
+    return message.reply(result.ok ? 'Голосовое подключение готово.' : `Не удалось подключиться: ${result.error}`);
   }
-  if (command === 'panel' || command === 'music') return message.channel.send(buildPanel(player));
-  if (command === 'pause' || command === 'resume') return message.reply(player.pause() ? 'Toggled pause.' : 'Nothing is playing.');
-  if (command === 'skip') return message.reply(player.skip() ? 'Skipped.' : 'Nothing to skip.');
+  if (command === 'panel' || command === 'music') {
+    if (args === 'reset') deletePanel(message.guildId);
+    const panelMessage = await publishPanel(message.channel, message.guildId, player);
+    return message.reply(`Панель готова: ${panelMessage.url}`);
+  }
+  if (command === 'pause' || command === 'resume') {
+    const ok = player.pause();
+    await refreshStoredPanel(message.guildId);
+    return message.reply(ok ? 'Пауза переключена.' : 'Сейчас ничего не играет.');
+  }
+  if (command === 'skip') {
+    const ok = player.skip();
+    await refreshStoredPanel(message.guildId);
+    return message.reply(ok ? 'Пропускаю.' : 'Сейчас нечего пропускать.');
+  }
   if (command === 'stop') {
     player.stop();
-    return message.reply('Stopped.');
+    await refreshStoredPanel(message.guildId);
+    return message.reply('Остановлено.');
   }
   if (command === 'leave' || command === 'disconnect') {
     player.leave();
-    return message.reply('Disconnected.');
+    await refreshStoredPanel(message.guildId);
+    return message.reply('Вышел из голосового канала.');
   }
   if (command === 'queue' || command === 'q') return message.reply(buildQueue(player));
-  if (command === 'now' || command === 'np') return message.reply(player.currentTrack ? `Now: **${player.currentTrack.title}**` : 'Nothing is playing.');
+  if (command === 'now' || command === 'np') return message.reply(player.currentTrack ? `Сейчас: **${player.currentTrack.title}**` : 'Сейчас ничего не играет.');
   if (command === 'help') {
     return message.reply([
-      `\`${config.prefix}play <song or url>\``,
+      `\`${config.prefix}play <трек или ссылка>\``,
       `\`${config.prefix}join\``,
-      `\`${config.prefix}panel\``,
+      `\`${config.prefix}panel\`, \`${config.prefix}panel reset\``,
       `\`${config.prefix}pause\`, \`${config.prefix}skip\`, \`${config.prefix}stop\`, \`${config.prefix}leave\``,
       `\`${config.prefix}queue\`, \`${config.prefix}now\``,
     ].join('\n'));
@@ -104,6 +164,7 @@ client.on(Events.InteractionCreate, async interaction => {
   const player = playerFor(interaction.guildId);
 
   if (interaction.isButton()) {
+    rememberPanelFromInteraction(interaction);
     if (interaction.customId === 'bdodj_add') return interaction.showModal(musicModal());
     if (interaction.customId === 'bdodj_queue') return interaction.reply({ ...buildQueue(player), flags: MessageFlags.Ephemeral });
     if (interaction.customId === 'bdodj_pause') {
@@ -118,6 +179,15 @@ client.on(Events.InteractionCreate, async interaction => {
       player.stop();
       return interaction.update(buildPanel(player));
     }
+    if (interaction.customId === 'bdodj_shuffle') {
+      player.shuffleQueue();
+      return interaction.update(buildPanel(player));
+    }
+    if (interaction.customId === 'bdodj_refresh') return interaction.update(buildPanel(player));
+    if (interaction.customId === 'bdodj_leave') {
+      player.leave();
+      return interaction.update(buildPanel(player));
+    }
   }
 
   if (interaction.isModalSubmit() && interaction.customId === 'bdodj_modal_add') {
@@ -125,8 +195,9 @@ client.on(Events.InteractionCreate, async interaction => {
     const voiceChannel = interaction.member?.voice?.channel;
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const result = await player.enqueue(query, interaction.user, voiceChannel);
-    if (!result.ok) return interaction.editReply(`Error: ${result.error}`);
-    return interaction.editReply(`Added: **${result.track.title}**`);
+    await refreshStoredPanel(interaction.guildId);
+    if (!result.ok) return interaction.editReply(`Не получилось: ${result.error}`);
+    return interaction.editReply(`Добавлено: **${result.track.title}**`);
   }
 });
 

@@ -55,6 +55,7 @@ class MusicPlayer {
     this.loopRunning = false;
     this.stopped = false;
     this.ffmpeg = null;
+    this.updateHandler = null;
     this.player = createAudioPlayer({
       behaviors: { noSubscriber: NoSubscriberBehavior.Play },
     });
@@ -62,7 +63,19 @@ class MusicPlayer {
     this.player.on('error', error => {
       this.lastError = error.message;
       console.error('[audio] player error:', error.stack || error.message);
+      this.notifyChange();
     });
+  }
+
+  setUpdateHandler(handler) {
+    this.updateHandler = handler;
+  }
+
+  notifyChange() {
+    if (!this.updateHandler) return;
+    Promise.resolve()
+      .then(() => this.updateHandler(this))
+      .catch(error => console.error('[panel] update failed:', error.message));
   }
 
   validateVoiceChannel(channel) {
@@ -99,6 +112,7 @@ class MusicPlayer {
     if (this.queue.length >= this.config.maxQueue) return { ok: false, error: 'Queue is full.' };
 
     this.status = 'resolving';
+    this.notifyChange();
     try {
       const track = await this.resolveTrack(query, requester);
       if (!this.currentTrack && !this.loopRunning) {
@@ -108,14 +122,18 @@ class MusicPlayer {
         this.runLoop().catch(error => {
           this.lastError = error.message;
           console.error('[audio] loop crashed:', error.stack || error.message);
+          this.notifyChange();
         });
+        this.notifyChange();
         return { ok: true, track, queueLength: this.queue.length };
       }
       this.queue.push(track);
+      this.notifyChange();
       return { ok: true, track, queueLength: this.queue.length };
     } catch (error) {
       this.status = this.currentTrack ? 'playing' : 'idle';
       this.lastError = error.message;
+      this.notifyChange();
       return { ok: false, error: error.message };
     }
   }
@@ -127,11 +145,13 @@ class MusicPlayer {
       while (this.currentTrack && !this.stopped) {
         await this.playCurrent();
         this.currentTrack = this.queue.shift() || null;
+        this.notifyChange();
       }
     } finally {
       this.loopRunning = false;
       this.status = 'idle';
       this.currentTrack = null;
+      this.notifyChange();
     }
   }
 
@@ -148,6 +168,7 @@ class MusicPlayer {
     }
 
     this.status = 'connecting';
+    this.notifyChange();
     console.log(`[voice] joining ${this.voiceChannel.name || this.voiceChannel.id} (${this.voiceChannel.id})`);
     this.connection = joinVoiceChannel({
       channelId: this.voiceChannel.id,
@@ -167,6 +188,7 @@ class MusicPlayer {
       await entersState(this.connection, VoiceConnectionStatus.Ready, this.config.voiceConnectTimeoutMs);
       console.log('[voice] ready');
       this.connection.subscribe(this.player);
+      this.notifyChange();
     } catch (error) {
       this.lastError = `Voice connection did not become ready: ${error.message}`;
       console.error(`[voice] failed to reach ready after ${this.config.voiceConnectTimeoutMs}ms:`, error.message);
@@ -174,6 +196,7 @@ class MusicPlayer {
         this.connection.destroy();
       } catch {}
       this.connection = null;
+      this.notifyChange();
       throw error;
     }
   }
@@ -228,14 +251,19 @@ class MusicPlayer {
       'pipe:1',
     ], { stdio: ['ignore', 'pipe', 'ignore'] });
     this.ffmpeg.once('error', error => console.error('[ffmpeg] spawn error:', error.message));
+    this.ffmpeg.once('close', () => {
+      this.ffmpeg = null;
+    });
     return createAudioResource(this.ffmpeg.stdout, { inputType: StreamType.OggOpus });
   }
 
   async playCurrent() {
     await this.ensureConnection();
     this.status = 'buffering';
+    this.notifyChange();
     const resource = await this.createResource(this.currentTrack);
     this.status = 'playing';
+    this.notifyChange();
     this.player.play(resource);
     await entersState(this.player, AudioPlayerStatus.Playing, 15000).catch(() => {});
     await new Promise(resolve => {
@@ -261,6 +289,7 @@ class MusicPlayer {
       this.player.pause(true);
       this.status = 'paused';
     }
+    this.notifyChange();
     return true;
   }
 
@@ -270,7 +299,24 @@ class MusicPlayer {
 
   skip() {
     if (!this.currentTrack) return false;
+    if (this.ffmpeg) {
+      try {
+        this.ffmpeg.kill('SIGKILL');
+      } catch {}
+      this.ffmpeg = null;
+    }
     this.player.stop(true);
+    this.notifyChange();
+    return true;
+  }
+
+  shuffleQueue() {
+    if (this.queue.length < 2) return false;
+    for (let i = this.queue.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [this.queue[i], this.queue[j]] = [this.queue[j], this.queue[i]];
+    }
+    this.notifyChange();
     return true;
   }
 
@@ -278,9 +324,15 @@ class MusicPlayer {
     this.stopped = true;
     this.queue = [];
     this.currentTrack = null;
-    if (this.ffmpeg) this.ffmpeg.kill('SIGKILL');
+    if (this.ffmpeg) {
+      try {
+        this.ffmpeg.kill('SIGKILL');
+      } catch {}
+      this.ffmpeg = null;
+    }
     this.player.stop(true);
     this.status = 'idle';
+    this.notifyChange();
   }
 
   leave() {
@@ -290,6 +342,7 @@ class MusicPlayer {
       this.connection = null;
     }
     this.voiceChannel = null;
+    this.notifyChange();
   }
 }
 
