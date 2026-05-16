@@ -55,6 +55,21 @@ final class MusicService {
       @Override
       public void onStatusChange(ConnectionStatus status) {
         System.out.printf("[voice] status=%s guild=%s channel=%s%n", status, channel.getGuild().getId(), channel.getId());
+        if (status.name().startsWith("ERROR_")) {
+          manager.scheduler.stop();
+          new Thread(() -> {
+            try {
+              Thread.sleep(250);
+            } catch (InterruptedException interrupted) {
+              Thread.currentThread().interrupt();
+            }
+            AudioManager currentAudio = channel.getGuild().getAudioManager();
+            if (currentAudio.isConnected() || currentAudio.isAttemptingToConnect()) {
+              System.out.printf("[voice] closing after %s guild=%s channel=%s%n", status, channel.getGuild().getId(), channel.getId());
+              currentAudio.closeAudioConnection();
+            }
+          }, "bdodj-voice-error-close").start();
+        }
       }
 
       @Override
