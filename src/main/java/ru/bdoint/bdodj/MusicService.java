@@ -9,7 +9,10 @@ import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
+import net.dv8tion.jda.api.audio.hooks.ConnectionListener;
+import net.dv8tion.jda.api.audio.hooks.ConnectionStatus;
 import net.dv8tion.jda.api.entities.Guild;
+import net.dv8tion.jda.api.entities.User;
 import net.dv8tion.jda.api.entities.VoiceChannel;
 import net.dv8tion.jda.api.managers.AudioManager;
 
@@ -40,12 +43,33 @@ final class MusicService {
     if (audio.getConnectedChannel() != null && audio.getConnectedChannel().getIdLong() == channel.getIdLong()) {
       return;
     }
+    audio.setAutoReconnect(false);
+    audio.setConnectTimeout(10_000);
+    audio.setSelfDeafened(true);
+    audio.setConnectionListener(new ConnectionListener() {
+      @Override
+      public void onPing(long ping) {
+        System.out.printf("[voice] ping=%dms guild=%s%n", ping, channel.getGuild().getId());
+      }
+
+      @Override
+      public void onStatusChange(ConnectionStatus status) {
+        System.out.printf("[voice] status=%s guild=%s channel=%s%n", status, channel.getGuild().getId(), channel.getId());
+      }
+
+      @Override
+      public void onUserSpeaking(User user, boolean speaking) {
+        // We only send audio, so speaking state is not useful for normal logs.
+      }
+    });
+    System.out.printf("[voice] opening guild=%s channel=%s name=%s%n", channel.getGuild().getId(), channel.getId(), channel.getName());
     audio.setSendingHandler(manager);
     audio.openAudioConnection(channel);
   }
 
   void leave(Guild guild) {
     manager(guild).scheduler.stop();
+    System.out.printf("[voice] closing guild=%s%n", guild.getId());
     guild.getAudioManager().closeAudioConnection();
   }
 
