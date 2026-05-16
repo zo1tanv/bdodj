@@ -11,6 +11,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.VoiceChannel;
+import net.dv8tion.jda.api.managers.AudioManager;
 
 final class MusicService {
   private final AudioPlayerManager audioManager;
@@ -35,8 +36,12 @@ final class MusicService {
 
   void connect(VoiceChannel channel) {
     GuildMusicManager manager = manager(channel.getGuild());
-    channel.getGuild().getAudioManager().setSendingHandler(manager);
-    channel.getGuild().getAudioManager().openAudioConnection(channel);
+    AudioManager audio = channel.getGuild().getAudioManager();
+    if (audio.getConnectedChannel() != null && audio.getConnectedChannel().getIdLong() == channel.getIdLong()) {
+      return;
+    }
+    audio.setSendingHandler(manager);
+    audio.openAudioConnection(channel);
   }
 
   void leave(Guild guild) {
@@ -44,11 +49,13 @@ final class MusicService {
     guild.getAudioManager().closeAudioConnection();
   }
 
-  void loadAndQueue(Guild guild, String query, Consumer<String> reply) {
+  void loadAndQueue(VoiceChannel channel, String query, Consumer<String> reply) {
+    Guild guild = channel.getGuild();
     String identifier = normalizeQuery(query);
     audioManager.loadItemOrdered(guild, identifier, new AudioLoadResultHandler() {
       @Override
       public void trackLoaded(AudioTrack track) {
+        connect(channel);
         int position = manager(guild).scheduler.queue(track);
         if (position < 0) {
           reply.accept("Queue is full.");

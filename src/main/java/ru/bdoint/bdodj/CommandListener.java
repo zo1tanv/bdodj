@@ -126,9 +126,8 @@ final class CommandListener extends ListenerAdapter {
       return;
     }
 
-    music.connect(channel);
     event.getChannel().sendTyping().queue();
-    music.loadAndQueue(event.getGuild(), query, reply -> {
+    music.loadAndQueue(channel, query, reply -> {
       event.getChannel().sendMessage(reply).queue();
       sendPanel(event.getChannel(), event.getGuild());
     });
