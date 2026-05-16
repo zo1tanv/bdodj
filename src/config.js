@@ -8,7 +8,6 @@ function numberEnv(name, fallback) {
 
 module.exports = {
   token: process.env.BDODJ_TOKEN || process.env.DISCORD_TOKEN,
-  prefix: process.env.BDODJ_PREFIX || '!',
   activity: process.env.BDODJ_ACTIVITY || 'BDO Radio',
   defaultVolume: numberEnv('BDODJ_DEFAULT_VOLUME', 60),
   maxQueue: numberEnv('BDODJ_MAX_QUEUE', 100),

@@ -14,7 +14,6 @@ Separate Node.js Discord music bot for the BDO server.
 
 ```env
 BDODJ_TOKEN=
-BDODJ_PREFIX=!
 BDODJ_ACTIVITY=BDO Radio
 BDODJ_DEFAULT_VOLUME=60
 BDODJ_MAX_QUEUE=100
@@ -23,12 +22,11 @@ BDODJ_VOICE_CONNECT_TIMEOUT_MS=30000
 
 `DISCORD_TOKEN` can be used instead of `BDODJ_TOKEN`.
 
-Enable Message Content Intent in the Discord Developer Portal:
-`Applications` -> BDODJ -> `Bot` -> `Privileged Gateway Intents`.
+Message Content Intent is not required because BDODJ uses slash commands and buttons.
 
 ## Main UX
 
-Run `!panel` once in the music text channel. BDODJ stores this message as the server music panel and keeps editing it after playback changes.
+Run `/panel` once in the existing music text channel. BDODJ stores this message as the server music panel and keeps editing it after playback changes.
 
 Buttons:
 - Add: opens a modal for a YouTube link or search text.
@@ -38,22 +36,20 @@ Buttons:
 
 The panel also shows the current track progress as elapsed time, total time, and a moving progress bar. While a track is playing, BDODJ refreshes the panel automatically.
 
-Use `!panel reset` to create a new saved panel.
+Use `/panel reset:true` to create a new saved panel in the current channel.
 
-## Commands
+## Slash Commands
 
 ```text
-!play <url or search text>
-!panel
-!panel reset
-!join
-!pause
-!skip
-!stop
-!leave
-!queue
-!now
-!help
+/panel
+/play <url or search text>
+/join
+/pause
+/skip
+/stop
+/leave
+/queue
+/now
 ```
 
 ## Local Run

@@ -1,4 +1,14 @@
-const { ActionRowBuilder, Client, Events, GatewayIntentBits, MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
+const {
+  ActionRowBuilder,
+  Client,
+  Events,
+  GatewayIntentBits,
+  MessageFlags,
+  ModalBuilder,
+  SlashCommandBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+} = require('discord.js');
 const config = require('./config');
 const MusicPlayer = require('./musicPlayer');
 const { buildPanel, buildQueue } = require('./musicPanel');
@@ -12,8 +22,6 @@ if (!config.token) {
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildVoiceStates,
   ],
 });
@@ -43,6 +51,45 @@ function musicModal() {
           .setRequired(true)
       )
     );
+}
+
+function slashCommands() {
+  return [
+    new SlashCommandBuilder()
+      .setName('panel')
+      .setDescription('Create or refresh the BDODJ music panel in this channel')
+      .addBooleanOption(option =>
+        option.setName('reset').setDescription('Create a new saved panel in this channel')
+      ),
+    new SlashCommandBuilder()
+      .setName('play')
+      .setDescription('Add a YouTube link or search text to the queue')
+      .addStringOption(option =>
+        option.setName('query').setDescription('YouTube link or search text').setRequired(true)
+      ),
+    new SlashCommandBuilder().setName('join').setDescription('Connect BDODJ to your voice channel'),
+    new SlashCommandBuilder().setName('pause').setDescription('Pause or resume playback'),
+    new SlashCommandBuilder().setName('skip').setDescription('Skip the current track'),
+    new SlashCommandBuilder().setName('stop').setDescription('Stop playback and clear the queue'),
+    new SlashCommandBuilder().setName('leave').setDescription('Disconnect BDODJ from voice'),
+    new SlashCommandBuilder().setName('queue').setDescription('Show the queue privately'),
+    new SlashCommandBuilder().setName('now').setDescription('Show the current track'),
+  ].map(command => command.toJSON());
+}
+
+async function registerSlashCommandsForGuild(guild) {
+  await guild.commands.set(slashCommands());
+}
+
+async function registerSlashCommands() {
+  const guilds = [...client.guilds.cache.values()];
+  await Promise.all(guilds.map(registerSlashCommandsForGuild));
+  console.log(`Registered BDODJ slash commands in ${guilds.length} guild(s).`);
+
+  if (!guilds.length) {
+    await client.application.commands.set(slashCommands());
+    console.log('Registered BDODJ global slash commands.');
+  }
 }
 
 async function fetchStoredPanel(guildId) {
@@ -87,75 +134,92 @@ function rememberPanelFromInteraction(interaction) {
   });
 }
 
-async function queueTrack(message, query) {
-  const voiceChannel = message.member?.voice?.channel;
-  const player = playerFor(message.guildId);
-  const loading = await message.reply('Ищу трек...');
-  const result = await player.enqueue(query, message.author, voiceChannel);
-  await refreshStoredPanel(message.guildId);
-  if (!result.ok) return loading.edit(`Не получилось: ${result.error}`);
-  return loading.edit(`Добавлено: **${result.track.title}**`);
+async function handleSlashCommand(interaction, player) {
+  if (interaction.commandName === 'panel') {
+    if (interaction.options.getBoolean('reset')) deletePanel(interaction.guildId);
+    const panelMessage = await publishPanel(interaction.channel, interaction.guildId, player);
+    return interaction.reply({ content: `Панель готова: ${panelMessage.url}`, flags: MessageFlags.Ephemeral });
+  }
+
+  if (interaction.commandName === 'play') {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    const result = await player.enqueue(
+      interaction.options.getString('query', true),
+      interaction.user,
+      interaction.member?.voice?.channel
+    );
+    await refreshStoredPanel(interaction.guildId);
+    if (!result.ok) return interaction.editReply(`Не получилось: ${result.error}`);
+    return interaction.editReply(`Добавлено: **${result.track.title}**`);
+  }
+
+  if (interaction.commandName === 'join') {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    const result = await player.connectOnly(interaction.member?.voice?.channel);
+    await refreshStoredPanel(interaction.guildId);
+    return interaction.editReply(result.ok ? 'Голосовое подключение готово.' : `Не удалось подключиться: ${result.error}`);
+  }
+
+  if (interaction.commandName === 'pause') {
+    const ok = player.pause();
+    await refreshStoredPanel(interaction.guildId);
+    return interaction.reply({ content: ok ? 'Пауза переключена.' : 'Сейчас ничего не играет.', flags: MessageFlags.Ephemeral });
+  }
+
+  if (interaction.commandName === 'skip') {
+    const ok = player.skip();
+    await refreshStoredPanel(interaction.guildId);
+    return interaction.reply({ content: ok ? 'Пропускаю.' : 'Сейчас нечего пропускать.', flags: MessageFlags.Ephemeral });
+  }
+
+  if (interaction.commandName === 'stop') {
+    player.stop();
+    await refreshStoredPanel(interaction.guildId);
+    return interaction.reply({ content: 'Остановлено.', flags: MessageFlags.Ephemeral });
+  }
+
+  if (interaction.commandName === 'leave') {
+    player.leave();
+    await refreshStoredPanel(interaction.guildId);
+    return interaction.reply({ content: 'Вышел из голосового канала.', flags: MessageFlags.Ephemeral });
+  }
+
+  if (interaction.commandName === 'queue') {
+    return interaction.reply({ ...buildQueue(player), flags: MessageFlags.Ephemeral });
+  }
+
+  if (interaction.commandName === 'now') {
+    return interaction.reply({
+      content: player.currentTrack ? `Сейчас: **${player.currentTrack.title}**` : 'Сейчас ничего не играет.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
 }
 
-client.once(Events.ClientReady, c => {
-  console.log(`BDODJ Node ready as ${c.user.tag}, prefix '${config.prefix}'`);
+async function reportInteractionError(interaction, error) {
+  console.error('Interaction failed:', error.stack || error.message);
+  const payload = { content: 'Что-то пошло не так. Посмотри логи BDODJ.', flags: MessageFlags.Ephemeral };
+  try {
+    if (interaction.deferred || interaction.replied) await interaction.editReply(payload.content);
+    else await interaction.reply(payload);
+  } catch {}
+}
+
+client.once(Events.ClientReady, async c => {
+  console.log(`BDODJ Node ready as ${c.user.tag}`);
   if (config.activity) c.user.setActivity(config.activity);
+  try {
+    await registerSlashCommands();
+  } catch (error) {
+    console.error('Failed to register slash commands:', error.stack || error.message);
+  }
 });
 
-client.on(Events.MessageCreate, async message => {
-  if (!message.guild || message.author.bot) return;
-  if (!message.content.startsWith(config.prefix)) return;
-
-  const body = message.content.slice(config.prefix.length).trim();
-  const [commandRaw, ...rest] = body.split(/\s+/);
-  const command = String(commandRaw || '').toLowerCase();
-  const args = rest.join(' ').trim();
-  const player = playerFor(message.guildId);
-
-  if (command === 'play' || command === 'p') {
-    if (!args) return message.reply(`Используй \`${config.prefix}play <трек или ссылка>\`.`);
-    return queueTrack(message, args);
-  }
-  if (command === 'join') {
-    const result = await player.connectOnly(message.member?.voice?.channel);
-    await refreshStoredPanel(message.guildId);
-    return message.reply(result.ok ? 'Голосовое подключение готово.' : `Не удалось подключиться: ${result.error}`);
-  }
-  if (command === 'panel' || command === 'music') {
-    if (args === 'reset') deletePanel(message.guildId);
-    const panelMessage = await publishPanel(message.channel, message.guildId, player);
-    return message.reply(`Панель готова: ${panelMessage.url}`);
-  }
-  if (command === 'pause' || command === 'resume') {
-    const ok = player.pause();
-    await refreshStoredPanel(message.guildId);
-    return message.reply(ok ? 'Пауза переключена.' : 'Сейчас ничего не играет.');
-  }
-  if (command === 'skip') {
-    const ok = player.skip();
-    await refreshStoredPanel(message.guildId);
-    return message.reply(ok ? 'Пропускаю.' : 'Сейчас нечего пропускать.');
-  }
-  if (command === 'stop') {
-    player.stop();
-    await refreshStoredPanel(message.guildId);
-    return message.reply('Остановлено.');
-  }
-  if (command === 'leave' || command === 'disconnect') {
-    player.leave();
-    await refreshStoredPanel(message.guildId);
-    return message.reply('Вышел из голосового канала.');
-  }
-  if (command === 'queue' || command === 'q') return message.reply(buildQueue(player));
-  if (command === 'now' || command === 'np') return message.reply(player.currentTrack ? `Сейчас: **${player.currentTrack.title}**` : 'Сейчас ничего не играет.');
-  if (command === 'help') {
-    return message.reply([
-      `\`${config.prefix}play <трек или ссылка>\``,
-      `\`${config.prefix}join\``,
-      `\`${config.prefix}panel\`, \`${config.prefix}panel reset\``,
-      `\`${config.prefix}pause\`, \`${config.prefix}skip\`, \`${config.prefix}stop\`, \`${config.prefix}leave\``,
-      `\`${config.prefix}queue\`, \`${config.prefix}now\``,
-    ].join('\n'));
+client.on(Events.GuildCreate, async guild => {
+  try {
+    await registerSlashCommandsForGuild(guild);
+  } catch (error) {
+    console.error(`Failed to register slash commands for ${guild.id}:`, error.message);
   }
 });
 
@@ -163,41 +227,47 @@ client.on(Events.InteractionCreate, async interaction => {
   if (!interaction.guild) return;
   const player = playerFor(interaction.guildId);
 
-  if (interaction.isButton()) {
-    rememberPanelFromInteraction(interaction);
-    if (interaction.customId === 'bdodj_add') return interaction.showModal(musicModal());
-    if (interaction.customId === 'bdodj_queue') return interaction.reply({ ...buildQueue(player), flags: MessageFlags.Ephemeral });
-    if (interaction.customId === 'bdodj_pause') {
-      player.pause();
-      return interaction.update(buildPanel(player));
-    }
-    if (interaction.customId === 'bdodj_skip') {
-      player.skip();
-      return interaction.update(buildPanel(player));
-    }
-    if (interaction.customId === 'bdodj_stop') {
-      player.stop();
-      return interaction.update(buildPanel(player));
-    }
-    if (interaction.customId === 'bdodj_shuffle') {
-      player.shuffleQueue();
-      return interaction.update(buildPanel(player));
-    }
-    if (interaction.customId === 'bdodj_refresh') return interaction.update(buildPanel(player));
-    if (interaction.customId === 'bdodj_leave') {
-      player.leave();
-      return interaction.update(buildPanel(player));
-    }
-  }
+  try {
+    if (interaction.isChatInputCommand()) return await handleSlashCommand(interaction, player);
 
-  if (interaction.isModalSubmit() && interaction.customId === 'bdodj_modal_add') {
-    const query = interaction.fields.getTextInputValue('query');
-    const voiceChannel = interaction.member?.voice?.channel;
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    const result = await player.enqueue(query, interaction.user, voiceChannel);
-    await refreshStoredPanel(interaction.guildId);
-    if (!result.ok) return interaction.editReply(`Не получилось: ${result.error}`);
-    return interaction.editReply(`Добавлено: **${result.track.title}**`);
+    if (interaction.isButton()) {
+      rememberPanelFromInteraction(interaction);
+      if (interaction.customId === 'bdodj_add') return await interaction.showModal(musicModal());
+      if (interaction.customId === 'bdodj_queue') return await interaction.reply({ ...buildQueue(player), flags: MessageFlags.Ephemeral });
+      if (interaction.customId === 'bdodj_pause') {
+        player.pause();
+        return await interaction.update(buildPanel(player));
+      }
+      if (interaction.customId === 'bdodj_skip') {
+        player.skip();
+        return await interaction.update(buildPanel(player));
+      }
+      if (interaction.customId === 'bdodj_stop') {
+        player.stop();
+        return await interaction.update(buildPanel(player));
+      }
+      if (interaction.customId === 'bdodj_shuffle') {
+        player.shuffleQueue();
+        return await interaction.update(buildPanel(player));
+      }
+      if (interaction.customId === 'bdodj_refresh') return await interaction.update(buildPanel(player));
+      if (interaction.customId === 'bdodj_leave') {
+        player.leave();
+        return await interaction.update(buildPanel(player));
+      }
+    }
+
+    if (interaction.isModalSubmit() && interaction.customId === 'bdodj_modal_add') {
+      const query = interaction.fields.getTextInputValue('query');
+      const voiceChannel = interaction.member?.voice?.channel;
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      const result = await player.enqueue(query, interaction.user, voiceChannel);
+      await refreshStoredPanel(interaction.guildId);
+      if (!result.ok) return await interaction.editReply(`Не получилось: ${result.error}`);
+      return await interaction.editReply(`Добавлено: **${result.track.title}**`);
+    }
+  } catch (error) {
+    await reportInteractionError(interaction, error);
   }
 });
 
