@@ -17,6 +17,36 @@ function clip(value, limit = 120) {
   return text.length > limit ? `${text.slice(0, limit - 1)}…` : text;
 }
 
+function formatTime(seconds) {
+  const total = Math.max(0, Math.floor(Number(seconds) || 0));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const secs = String(total % 60).padStart(2, '0');
+  return hours ? `${hours}:${String(minutes).padStart(2, '0')}:${secs}` : `${minutes}:${secs}`;
+}
+
+function progressLine(player) {
+  if (!player?.currentTrack) return '0:00 / 0:00\n`────────────`';
+
+  const progress = player.getProgress?.() || { elapsedSeconds: 0, durationSeconds: 0, percent: 0, isLive: false };
+  if (progress.isLive) return `${formatTime(progress.elapsedSeconds)} / live\n\`LIVE - ON AIR\``;
+
+  const totalBlocks = 18;
+  if (progress.durationSeconds <= 0) {
+    const marker = progress.elapsedSeconds % totalBlocks;
+    const bar = Array.from({ length: totalBlocks }, (_, index) => (index === marker ? '◆' : '─')).join('');
+    return `${formatTime(progress.elapsedSeconds)} / ?:??\n\`${bar}\``;
+  }
+
+  const marker = Math.min(totalBlocks - 1, Math.max(0, Math.floor(progress.percent * totalBlocks)));
+  const bar = Array.from({ length: totalBlocks }, (_, index) => {
+    if (index === marker) return '◆';
+    return index < marker ? '━' : '─';
+  }).join('');
+
+  return `${formatTime(progress.elapsedSeconds)} / ${formatTime(progress.durationSeconds)}\n\`${bar}\``;
+}
+
 function queuePreview(player) {
   if (!player?.queue?.length) return 'Очередь пуста';
   const lines = player.queue.slice(0, 6).map((track, index) =>
@@ -31,7 +61,6 @@ function nowPlaying(player) {
   if (!track) return 'Нажми **Добавить**, чтобы поставить первый трек.';
   return [
     `[${clip(track.title, 120)}](${track.webpageUrl})`,
-    `Длительность: **${track.durationStr || '?:??'}**`,
     `Заказал: ${track.requester?.id ? `<@${track.requester.id}>` : 'неизвестно'}`,
   ].join('\n');
 }
@@ -44,6 +73,7 @@ function buildPanel(player) {
     .setDescription(`${status.icon} **${status.label}**`)
     .addFields(
       { name: 'Сейчас', value: nowPlaying(player) },
+      { name: 'Прогресс', value: progressLine(player) },
       { name: `Очередь (${player?.queue?.length || 0})`, value: queuePreview(player) },
     )
     .setFooter({ text: player?.voiceChannel ? `Канал: ${player.voiceChannel.name}` : 'BDO Radio' })

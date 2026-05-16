@@ -36,6 +36,8 @@ Buttons:
 - Pause, Skip, Stop: playback controls.
 - Shuffle, Refresh, Leave: queue and voice controls.
 
+The panel also shows the current track progress as elapsed time, total time, and a moving progress bar. While a track is playing, BDODJ refreshes the panel automatically.
+
 Use `!panel reset` to create a new saved panel.
 
 ## Commands

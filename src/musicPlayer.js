@@ -34,10 +34,12 @@ function firstEntry(data) {
 function trackFromInfo(info, query, requester) {
   const idUrl = info?.id ? `https://www.youtube.com/watch?v=${info.id}` : query;
   const webpageUrl = info?.webpage_url || info?.original_url || idUrl;
+  const durationSeconds = Number(info?.duration) || 0;
   return {
     title: info?.title || query,
     webpageUrl,
-    durationStr: info?.is_live ? 'live' : formatDuration(info?.duration),
+    durationSeconds: info?.is_live ? 0 : durationSeconds,
+    durationStr: info?.is_live ? 'live' : formatDuration(durationSeconds),
     requester,
   };
 }
@@ -56,6 +58,10 @@ class MusicPlayer {
     this.stopped = false;
     this.ffmpeg = null;
     this.updateHandler = null;
+    this.progressTimer = null;
+    this.currentStartedAt = 0;
+    this.currentPausedAt = 0;
+    this.pausedTotalMs = 0;
     this.player = createAudioPlayer({
       behaviors: { noSubscriber: NoSubscriberBehavior.Play },
     });
@@ -76,6 +82,45 @@ class MusicPlayer {
     Promise.resolve()
       .then(() => this.updateHandler(this))
       .catch(error => console.error('[panel] update failed:', error.message));
+  }
+
+  startProgressTimer() {
+    if (this.progressTimer) return;
+    this.progressTimer = setInterval(() => {
+      if (this.currentTrack && this.status === 'playing' && !this.isPaused()) this.notifyChange();
+    }, 10_000);
+    this.progressTimer.unref?.();
+  }
+
+  stopProgressTimer() {
+    if (!this.progressTimer) return;
+    clearInterval(this.progressTimer);
+    this.progressTimer = null;
+  }
+
+  resetProgress() {
+    this.currentStartedAt = 0;
+    this.currentPausedAt = 0;
+    this.pausedTotalMs = 0;
+    this.stopProgressTimer();
+  }
+
+  getElapsedSeconds() {
+    if (!this.currentTrack || !this.currentStartedAt) return 0;
+    const now = this.currentPausedAt || Date.now();
+    return Math.max(0, Math.floor((now - this.currentStartedAt - this.pausedTotalMs) / 1000));
+  }
+
+  getProgress() {
+    const elapsedSeconds = this.getElapsedSeconds();
+    const durationSeconds = Number(this.currentTrack?.durationSeconds) || 0;
+    const percent = durationSeconds > 0 ? Math.min(1, elapsedSeconds / durationSeconds) : 0;
+    return {
+      elapsedSeconds,
+      durationSeconds,
+      percent,
+      isLive: this.currentTrack?.durationStr === 'live',
+    };
   }
 
   validateVoiceChannel(channel) {
@@ -119,6 +164,7 @@ class MusicPlayer {
         this.currentTrack = track;
         this.voiceChannel = voiceChannel;
         this.stopped = false;
+        this.resetProgress();
         this.runLoop().catch(error => {
           this.lastError = error.message;
           console.error('[audio] loop crashed:', error.stack || error.message);
@@ -145,12 +191,14 @@ class MusicPlayer {
       while (this.currentTrack && !this.stopped) {
         await this.playCurrent();
         this.currentTrack = this.queue.shift() || null;
+        this.resetProgress();
         this.notifyChange();
       }
     } finally {
       this.loopRunning = false;
       this.status = 'idle';
       this.currentTrack = null;
+      this.resetProgress();
       this.notifyChange();
     }
   }
@@ -263,6 +311,10 @@ class MusicPlayer {
     this.notifyChange();
     const resource = await this.createResource(this.currentTrack);
     this.status = 'playing';
+    this.currentStartedAt = Date.now();
+    this.currentPausedAt = 0;
+    this.pausedTotalMs = 0;
+    this.startProgressTimer();
     this.notifyChange();
     this.player.play(resource);
     await entersState(this.player, AudioPlayerStatus.Playing, 15000).catch(() => {});
@@ -283,11 +335,18 @@ class MusicPlayer {
   pause() {
     if (!this.currentTrack) return false;
     if (this.player.state.status === AudioPlayerStatus.Paused) {
+      if (this.currentPausedAt) {
+        this.pausedTotalMs += Date.now() - this.currentPausedAt;
+        this.currentPausedAt = 0;
+      }
       this.player.unpause();
       this.status = 'playing';
+      this.startProgressTimer();
     } else {
       this.player.pause(true);
       this.status = 'paused';
+      this.currentPausedAt = Date.now();
+      this.stopProgressTimer();
     }
     this.notifyChange();
     return true;
@@ -306,6 +365,7 @@ class MusicPlayer {
       this.ffmpeg = null;
     }
     this.player.stop(true);
+    this.stopProgressTimer();
     this.notifyChange();
     return true;
   }
@@ -324,6 +384,7 @@ class MusicPlayer {
     this.stopped = true;
     this.queue = [];
     this.currentTrack = null;
+    this.resetProgress();
     if (this.ffmpeg) {
       try {
         this.ffmpeg.kill('SIGKILL');
