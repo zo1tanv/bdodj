@@ -1,23 +1,23 @@
 # BDODJ
 
-Отдельный Java Discord music bot для BDO-сервера. Работает независимо от основного BDO bot и управляется кнопочной панелью.
+Separate Java Discord music bot for the BDO server. It runs independently from the main BDO bot and provides a button panel for playback control.
 
-## Команды
+## Commands
 
 ```text
-!play <ссылка или название>  - добавить трек
-!panel                       - показать кнопочную панель
-!pause                       - пауза
-!resume                      - продолжить
-!skip                        - следующий трек
-!stop                        - очистить очередь
-!leave                       - выйти из голосового канала
-!queue                       - показать очередь
-!now                         - текущий трек
-!help                        - помощь
+!play <url or search text>  - add a track
+!panel                      - show the button panel
+!pause                      - pause
+!resume                     - resume
+!skip                       - skip current track
+!stop                       - clear queue
+!leave                      - leave the voice channel
+!queue                      - show queue
+!now                        - show current track
+!help                       - show help
 ```
 
-## Переменные
+## Environment
 
 ```env
 BDODJ_TOKEN=
@@ -28,9 +28,11 @@ BDODJ_MAX_QUEUE=100
 BDODJ_DEFAULT_VOLUME=60
 ```
 
-Можно использовать `DISCORD_TOKEN` вместо `BDODJ_TOKEN`.
+`DISCORD_TOKEN` can be used instead of `BDODJ_TOKEN`.
 
-## Локальный запуск
+For prefix commands, enable Message Content Intent in the Discord Developer Portal for the BDODJ application.
+
+## Local Run
 
 ```bash
 mvn package
@@ -43,3 +45,5 @@ java -jar target/bdodj-0.1.0.jar
 docker build -t bdodj .
 docker run --env-file .env bdodj
 ```
+
+Bothost can run this project only if the plan supports Docker or a custom Java container. If the Discord bot preset only offers Python, Node.js, and Go, use a separate Docker/VPS host for BDODJ or port BDODJ to Node.js.
