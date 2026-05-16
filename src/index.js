@@ -106,19 +106,36 @@ async function fetchStoredPanel(guildId) {
   }
 }
 
+function isUnknownMessage(error) {
+  return error?.code === 10008 || /Unknown Message/i.test(String(error?.message || ''));
+}
+
 async function refreshStoredPanel(guildId) {
   const panelMessage = await fetchStoredPanel(guildId);
   if (!panelMessage) return null;
   const player = playerFor(guildId);
-  await panelMessage.edit(buildPanel(player));
-  return panelMessage;
+  try {
+    await panelMessage.edit(buildPanel(player));
+    return panelMessage;
+  } catch (error) {
+    if (isUnknownMessage(error)) {
+      deletePanel(guildId);
+      return null;
+    }
+    throw error;
+  }
 }
 
 async function publishPanel(channel, guildId, player) {
   const existing = await fetchStoredPanel(guildId);
   if (existing) {
-    await existing.edit(buildPanel(player));
-    return existing;
+    try {
+      await existing.edit(buildPanel(player));
+      return existing;
+    } catch (error) {
+      if (!isUnknownMessage(error)) throw error;
+      deletePanel(guildId);
+    }
   }
 
   const message = await channel.send(buildPanel(player));
