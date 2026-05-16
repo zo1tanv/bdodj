@@ -35,6 +35,7 @@ Buttons:
 - Playlists: opens server/personal playlists and save-current controls.
 - Pause, Skip, Stop: playback controls.
 - Shuffle, Refresh, Leave: queue and voice controls.
+- Volume: select `1/10` through `10/10` from the panel.
 
 The panel also shows the current track progress as elapsed time, total time, and a moving progress bar. While a track is playing, BDODJ refreshes the panel automatically.
 
@@ -61,7 +62,7 @@ Use `/panel reset:true` to create a new saved panel in the current channel.
 ```
 
 Recommendations are stored in `data/recommendations.json`.
-Runtime panel and playlist data are stored in `data/panels.json` and `data/playlists.json`.
+Runtime panel, playlist, and server settings data are stored in `data/panels.json`, `data/playlists.json`, and `data/settings.json`.
 
 ## Local Run
 

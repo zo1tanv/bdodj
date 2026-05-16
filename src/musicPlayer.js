@@ -31,6 +31,10 @@ function firstEntry(data) {
   return data;
 }
 
+function volumeLevelFromDefault(defaultVolume) {
+  return Math.min(10, Math.max(1, Math.round((Number(defaultVolume) || 60) / 10)));
+}
+
 function trackFromInfo(info, query, requester) {
   const idUrl = info?.id ? `https://www.youtube.com/watch?v=${info.id}` : query;
   const webpageUrl = info?.webpage_url || info?.original_url || idUrl;
@@ -62,6 +66,7 @@ class MusicPlayer {
     this.currentStartedAt = 0;
     this.currentPausedAt = 0;
     this.pausedTotalMs = 0;
+    this.volumeLevel = volumeLevelFromDefault(config.defaultVolume);
     this.player = createAudioPlayer({
       behaviors: { noSubscriber: NoSubscriberBehavior.Play },
     });
@@ -121,6 +126,22 @@ class MusicPlayer {
       percent,
       isLive: this.currentTrack?.durationStr === 'live',
     };
+  }
+
+  getVolumeLevel() {
+    return this.volumeLevel;
+  }
+
+  getVolumeMultiplier() {
+    return Math.min(1, Math.max(0.1, this.volumeLevel / 10));
+  }
+
+  setVolumeLevel(level) {
+    const next = Number(level);
+    if (!Number.isInteger(next) || next < 1 || next > 10) return false;
+    this.volumeLevel = next;
+    this.notifyChange();
+    return true;
   }
 
   validateVoiceChannel(channel) {
@@ -281,7 +302,7 @@ class MusicPlayer {
 
   async createResource(track) {
     const url = await this.directAudioUrl(track);
-    const volume = Math.max(0, Math.min(2, this.config.defaultVolume / 100)).toFixed(2);
+    const volume = this.getVolumeMultiplier().toFixed(2);
     this.ffmpeg = spawn('ffmpeg', [
       '-hide_banner',
       '-loglevel', 'warning',

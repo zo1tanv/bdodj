@@ -3,25 +3,31 @@
     {
       "id": "popular",
       "label": "Популярное",
-      "description": "Знакомые треки для общего вайба",
+      "description": "Узнаваемые треки для общего канала",
       "tracks": [
-        { "title": "The Weeknd - Blinding Lights", "query": "The Weeknd Blinding Lights" },
-        { "title": "Imagine Dragons - Believer", "query": "Imagine Dragons Believer" },
-        { "title": "Dua Lipa - Levitating", "query": "Dua Lipa Levitating" },
-        { "title": "Daft Punk - One More Time", "query": "Daft Punk One More Time" },
-        { "title": "Avicii - The Nights", "query": "Avicii The Nights" }
+        { "title": "The Weeknd - Blinding Lights", "query": "The Weeknd Blinding Lights official audio" },
+        { "title": "Imagine Dragons - Believer", "query": "Imagine Dragons Believer official audio" },
+        { "title": "Dua Lipa - Levitating", "query": "Dua Lipa Levitating official audio" },
+        { "title": "Daft Punk - One More Time", "query": "Daft Punk One More Time official audio" },
+        { "title": "Avicii - The Nights", "query": "Avicii The Nights official audio" },
+        { "title": "Coldplay - Viva La Vida", "query": "Coldplay Viva La Vida official audio" },
+        { "title": "Post Malone - Circles", "query": "Post Malone Circles official audio" },
+        { "title": "Tame Impala - The Less I Know The Better", "query": "Tame Impala The Less I Know The Better official audio" }
       ]
     },
     {
       "id": "grind",
       "label": "BDO grind",
-      "description": "Ритм для фарма и долгих сессий",
+      "description": "Драйв для фарма и долгих спотов",
       "tracks": [
         { "title": "Carpenter Brut - Turbo Killer", "query": "Carpenter Brut Turbo Killer" },
         { "title": "Perturbator - Future Club", "query": "Perturbator Future Club" },
         { "title": "The Prodigy - Omen", "query": "The Prodigy Omen" },
         { "title": "Celldweller - End of an Empire", "query": "Celldweller End of an Empire" },
-        { "title": "Blue Stahli - ULTRAnumb", "query": "Blue Stahli ULTRAnumb" }
+        { "title": "Blue Stahli - ULTRAnumb", "query": "Blue Stahli ULTRAnumb" },
+        { "title": "Mick Gordon - BFG Division", "query": "Mick Gordon BFG Division" },
+        { "title": "Sullivan King - Someone Else", "query": "Sullivan King Someone Else" },
+        { "title": "Battle Tapes - Valkyrie", "query": "Battle Tapes Valkyrie" }
       ]
     },
     {
@@ -33,19 +39,25 @@
         { "title": "Tycho - Awake", "query": "Tycho Awake" },
         { "title": "M83 - Midnight City", "query": "M83 Midnight City" },
         { "title": "Bonobo - Cirrus", "query": "Bonobo Cirrus" },
-        { "title": "Petit Biscuit - Sunset Lover", "query": "Petit Biscuit Sunset Lover" }
+        { "title": "Petit Biscuit - Sunset Lover", "query": "Petit Biscuit Sunset Lover" },
+        { "title": "Nujabes - Feather", "query": "Nujabes Feather" },
+        { "title": "Emancipator - Soon It Will Be Cold Enough", "query": "Emancipator Soon It Will Be Cold Enough" },
+        { "title": "Kiasmos - Looped", "query": "Kiasmos Looped" }
       ]
     },
     {
       "id": "rock",
-      "label": "Rock",
-      "description": "Гитары, драйв, классика",
+      "label": "Rock / Metal",
+      "description": "Гитары, энергия, рейдовый настрой",
       "tracks": [
-        { "title": "Linkin Park - Numb", "query": "Linkin Park Numb" },
-        { "title": "Muse - Hysteria", "query": "Muse Hysteria" },
-        { "title": "Foo Fighters - The Pretender", "query": "Foo Fighters The Pretender" },
+        { "title": "Linkin Park - Numb", "query": "Linkin Park Numb official audio" },
+        { "title": "Muse - Hysteria", "query": "Muse Hysteria official audio" },
+        { "title": "Foo Fighters - The Pretender", "query": "Foo Fighters The Pretender official audio" },
         { "title": "Royal Blood - Figure It Out", "query": "Royal Blood Figure It Out" },
-        { "title": "Arctic Monkeys - R U Mine?", "query": "Arctic Monkeys R U Mine" }
+        { "title": "Arctic Monkeys - R U Mine?", "query": "Arctic Monkeys R U Mine" },
+        { "title": "Bring Me The Horizon - Throne", "query": "Bring Me The Horizon Throne" },
+        { "title": "Nothing More - This Is The Time", "query": "Nothing More This Is The Time" },
+        { "title": "Sabaton - Winged Hussars", "query": "Sabaton Winged Hussars" }
       ]
     },
     {
@@ -57,7 +69,25 @@
         { "title": "Justice - Genesis", "query": "Justice Genesis" },
         { "title": "The Chemical Brothers - Go", "query": "The Chemical Brothers Go" },
         { "title": "Kavinsky - Nightcall", "query": "Kavinsky Nightcall" },
-        { "title": "Skrillex - Bangarang", "query": "Skrillex Bangarang" }
+        { "title": "Skrillex - Bangarang", "query": "Skrillex Bangarang" },
+        { "title": "Madeon - Finale", "query": "Madeon Finale" },
+        { "title": "Porter Robinson - Language", "query": "Porter Robinson Language" },
+        { "title": "Noisia - Collider", "query": "Noisia Collider" }
+      ]
+    },
+    {
+      "id": "soundtracks",
+      "label": "Soundtracks",
+      "description": "Музыка для атмосферы и боссов",
+      "tracks": [
+        { "title": "Hans Zimmer - Time", "query": "Hans Zimmer Time" },
+        { "title": "Two Steps From Hell - Victory", "query": "Two Steps From Hell Victory" },
+        { "title": "Audiomachine - Blood and Stone", "query": "Audiomachine Blood and Stone" },
+        { "title": "Jeremy Soule - Dragonborn", "query": "Skyrim Dragonborn Jeremy Soule" },
+        { "title": "Bear McCreary - God of War", "query": "Bear McCreary God of War" },
+        { "title": "Lorne Balfe - Ezio's Family", "query": "Ezio's Family Lorne Balfe" },
+        { "title": "Yuki Kajiura - Swordland", "query": "Yuki Kajiura Swordland" },
+        { "title": "Hiroyuki Sawano - YouSeeBIGGIRL", "query": "Hiroyuki Sawano YouSeeBIGGIRL" }
       ]
     }
   ]

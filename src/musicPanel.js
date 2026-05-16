@@ -1,4 +1,4 @@
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, StringSelectMenuBuilder } = require('discord.js');
 
 function statusView(player) {
   if (!player?.currentTrack) {
@@ -67,6 +67,7 @@ function nowPlaying(player) {
 
 function buildPanel(player) {
   const status = statusView(player);
+  const volumeLevel = player?.getVolumeLevel?.() || 6;
   const embed = new EmbedBuilder()
     .setTitle('BDODJ Music Panel')
     .setColor(status.color)
@@ -76,7 +77,7 @@ function buildPanel(player) {
       { name: 'Прогресс', value: progressLine(player) },
       { name: `Очередь (${player?.queue?.length || 0})`, value: queuePreview(player) },
     )
-    .setFooter({ text: player?.voiceChannel ? `Канал: ${player.voiceChannel.name}` : 'BDO Radio' })
+    .setFooter({ text: `${player?.voiceChannel ? `Канал: ${player.voiceChannel.name}` : 'BDO Radio'} • Громкость ${volumeLevel}/10` })
     .setTimestamp();
 
   if (player?.lastError) {
@@ -99,7 +100,22 @@ function buildPanel(player) {
     new ButtonBuilder().setCustomId('bdodj_leave').setEmoji('🚪').setLabel('Выйти').setStyle(ButtonStyle.Secondary),
   );
 
-  return { embeds: [embed], components: [row1, row2] };
+  const volumeMenu = new StringSelectMenuBuilder()
+    .setCustomId('bdodj_volume')
+    .setPlaceholder(`Громкость: ${volumeLevel}/10`)
+    .addOptions(Array.from({ length: 10 }, (_, index) => {
+      const level = index + 1;
+      return {
+        label: `${level}/10`,
+        description: `${level * 10}%`,
+        value: String(level),
+        default: level === volumeLevel,
+      };
+    }));
+
+  const row3 = new ActionRowBuilder().addComponents(volumeMenu);
+
+  return { embeds: [embed], components: [row1, row2, row3] };
 }
 
 function buildQueue(player) {

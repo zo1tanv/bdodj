@@ -18,6 +18,7 @@ const { buildPanel, buildQueue } = require('./musicPanel');
 const { deletePanel, getPanel, setPanel } = require('./panelStore');
 const recommendations = require('./recommendations');
 const playlists = require('./playlistStore');
+const { guildSettings, setGuildVolume } = require('./settingsStore');
 
 if (!config.token) {
   console.error('BDODJ_TOKEN or DISCORD_TOKEN is required.');
@@ -39,6 +40,8 @@ function playerFor(guildId) {
     player = new MusicPlayer(client, config);
     player.setUpdateHandler(() => refreshStoredPanel(guildId));
     players.set(guildId, player);
+    const settings = guildSettings(guildId);
+    if (settings.volumeLevel) player.setVolumeLevel(settings.volumeLevel);
   }
   return player;
 }
@@ -534,6 +537,17 @@ client.on(Events.InteractionCreate, async interaction => {
     }
 
     if (interaction.isStringSelectMenu()) {
+      if (interaction.customId === 'bdodj_volume') {
+        const ok = player.setVolumeLevel(Number(interaction.values[0]));
+        if (ok) setGuildVolume(interaction.guildId, player.getVolumeLevel());
+        const suffix = player.currentTrack ? ' Применится со следующего трека.' : '';
+        await interaction.update(buildPanel(player));
+        return await interaction.followUp({
+          content: ok ? `Громкость: **${player.getVolumeLevel()}/10**.${suffix}` : 'Не удалось изменить громкость.',
+          flags: MessageFlags.Ephemeral,
+        });
+      }
+
       if (interaction.customId === 'bdodj_rec_category') {
         return await interaction.update(buildRecommendationTrackMenu(interaction.values[0]));
       }
